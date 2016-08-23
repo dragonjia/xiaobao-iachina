@@ -1,0 +1,1 @@
+fullname="前海民太安保险经纪有限公司",shortname="1、www.xiaoyusan.com 2、微信公众号“xysbaoxian”",siteurl="1、www.xiaoyusan.com 2、微信公众号“xysbaoxian”",icp_info="粤ICP备14083896号-4，前海民太安保险经纪有限公司",biz_op_range="意外伤害保险,费用补偿型医疗保险,定额给付型医疗保险"

@@ -1,0 +1,99 @@
+
+
+
+
+
+
+
+
+<script type="text/javascript">
+	window.history.forward(1);
+
+	window.onload = function () {
+		var superA = document.getElementsByTagName("a");
+		for (var i = 0; i < superA.length; i++) {
+			superA[i].oncontextmenu = function () {return false;};
+		}
+	};
+</script>
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=GBK">
+<title>合作第三方网络平台列表</title>
+<link rel='stylesheet' type='text/css' href='/common/css/Standard.css'>
+<script type="text/javascript" src="/pages/common/ImportJs.jsp"></script>
+</head>
+<div class="two" style="text-align:left">
+	【】合作第三方网络平台列表
+</div>
+
+<table border="0" cellpadding="0" cellspacing="0" width="100%" style="table-layout:fixed;word-wrap:break-word;margin-top:20px;" class="form">
+	
+		<tr><td style="width:40%;color:red;font-size:14px;font-weight:bold;text-align:center;">没有当前合作第三方网络平台列表信息！</td></tr>
+	
+	
+</table>
+<input type="hidden" id="columnid" name="columnid" value="2015111318230001"/>
+<input type="hidden" id="internetInformationNo" name="internetInformationNo" value="201510131865"/>
+<input type="hidden" id="comCode" name="comCode" value="PAYLX"/>
+<input type="hidden" id="informationno" name="informationno" value="201510131865"/>
+<input type="hidden" id="zj" name="zj" value="03"/>
+<br/>
+<div style="text-align:center;width:100%;height:100px;">
+    <button class="last" style="margin-bottom: 30px;margin-right: auto;margin-left: auto;border:0;color:#FFF;font-size:14px" id="back" onclick="back1();" value="返回上一级">返回上一级</button>
+</div>
+<br/>
+<script type="text/javascript">
+function back1(){
+	var a = document.getElementById("internetInformationNo").value;
+	a = a.replace(/\s+/g,"");
+	var id = document.getElementById("columnid").value;
+	var i = document.getElementById("informationno").value;
+	i = i.replace(/\s+/g,"");
+	var zj = document.getElementById("zj").value;
+	$.post("/front/viewThird.do",
+			{	"informationno":i,
+				"columnid":id,
+				"zj":zj,
+				"internetInformationNo":a
+			},function(data){	
+		$("#main").html(data);
+	});
+}
+function zjDetail(id,oldId,flag,type){
+	var cid = document.getElementById("columnid").value;
+	var no = document.getElementById("internetInformationNo").value;
+	var i = document.getElementById("informationno").value;
+	i = i.replace(/\s+/g,"");
+	var zj = document.getElementById("zj").value;
+	if(flag == '01'){//当前
+		$.post("/front/viewTerraceProduct.do",
+				{	"informationno":i,
+					"columnid":cid,
+					"terraceNo":id,
+					"zj":zj,
+					"internetInformationNo":no,
+					"type":flag,
+					"oldTerraceNo":oldId,
+					"comType":'02' //01中介，02第三方
+				},function(data){	
+			$("#main").html(data);
+		});
+	}
+	if(flag == '00'){//历史
+		$.post("/front/viewTerraceProductHis.do",
+				{	"informationno":i,
+					"columnid":cid,
+					"terraceNo":id,
+					"type":flag,
+					"zj":zj,
+					"oldTerraceNo":oldId,
+					"internetInformationNo":no,
+					"comType":'02' //01中介，02第三方
+				},function(data){	
+			$("#main").html(data);
+		});
+	}
+}
+</script>

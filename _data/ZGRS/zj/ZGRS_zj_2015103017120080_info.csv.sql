@@ -1,0 +1,1 @@
+fullname="蚂蚁胜信（上海）金融信息服务有限公司",shortname="天猫旗舰店",siteurl="1 www.taobao.com 2 www.tmall.com",icp_info="浙B2-20080224-1，浙江淘宝网络有限公司 2.浙B2-20080224-1，浙江天猫网络有限公司",biz_op_range="意外伤害保险,重大疾病保险,费用补偿型医疗保险,定额给付型医疗保险,普通型"

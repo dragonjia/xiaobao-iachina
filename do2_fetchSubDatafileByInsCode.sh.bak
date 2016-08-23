@@ -1,0 +1,292 @@
+#!/bin/bash
+###
+#	$#	传递到脚本的参数个数
+#	$*	以一个单字符串显示所有向脚本传递的参数
+#	$$	脚本运行的当前进程ID号
+#	$!	后台运行的最后一个进程的ID号
+#	$@	与$*相同，但是使用时加引号，并在引号中返回每个参数。
+#	$-	显示Shell使用的当前选项，与set命令功能相同。
+#	$?	显示最后命令的退出状态。0表示没有错误，其他任何值表明有错误。
+###
+source func/logs.sh
+
+## 
+if [[ $commonMark -ne 1 ]];then 
+	source func/common-draft.sh 
+fi
+source ExtractorFunc.sh
+source conf/DB.conf
+
+
+function printParam(){
+	#printParam param_no param_columnid param_zj flag param_terraceno param_type param_oldterr param_comType 
+	echo "$0:printParam():"$*;
+}
+
+## 生成中介产品详情url ;(zj 详情+部分授权合作产品）
+function makeUrl_TerraceProduct(){
+	local url="http://icid.iachina.cn/front/viewTerraceProduct.do?"
+	echo $url$1 
+}
+
+## 生成(旧版)中介产品详情url ;(zj 详情+部分授权合作产品）
+function makeUrl_oldTerraceProduct(){
+	local url="http://icid.iachina.cn/front/viewTerraceProductHis.do?"
+	echo $url$1 
+}
+## 生成中介平台全部合作产品页
+function makeUrl_viewAllPro(){
+	local url="http://icid.iachina.cn/front/viewAllPro.do?"
+	echo $url$1 
+}
+
+## 将，保险公司 合作中介页面 的中介信息提取并保存到 mysql 表：zj_info ；同时保存合作关系到表：ins_zj_cooperation 
+## 注意，是保存到两张表
+# function in2mysql_zj_info(){
+# 	local zj_code=$1;
+# 	local fn_info_plain=$2;
+# 	#local sql_file=${zj_prolist_file}.sql
+	
+# 	while read line ; do
+# 		## format:  insert into zj_products set ins_code="",no="",saleName="",regName="";
+# 		local str="insert into zj_products set ins_code=\"$ins_code\",code=\"$zj_code\",$line;"
+# 		echo $str;
+# 	done<$zj_prolist_file 
+# }	
+
+
+### 执行导入数据库操作； 不关心业务逻辑
+## 输入：文件
+
+function Mysql_run(){
+	local sql=`echo $1|sed 's/"/\\"/g'`
+	$mysql_go "-e $sql" || syserr "Mysql_run:::sql=($sql) ;Error Exit!",exit -1;
+
+}
+
+function Mysql_import(){
+	local sql_file=$1;
+	if [[ -e $sql_file ]]; then
+		syserr "function import2mysql:: parameter is not file! ,exit"
+		exit -1;
+	fi
+
+	$(syslog "正在建设中……");
+
+}
+### insert zj_info 信息到mysql
+### 参数：$1 -- 文件名 ；部分sql语句 ：fullname="中国民航信息网络股份有限公司",shortname="www.jhwvip.com",siteurl="www.jhwvip.com",icp_info="京ICP备06014661号",biz_op_range="意外伤害保险,普通型"
+function insertZJInfo2Mysql(){
+	if [[ -z $2 || ! -f $1 ]];then
+		syserr "Usage: insertZJInfo2Mysql(): ZJINFO_FILE ZJCODE"
+		exit -1;
+	fi
+
+	local sql_part=`head -1 $1`
+	local zj_code=$2;
+
+
+	sql="insert into zj_info set code=\"$zj_code\" ,"$sql_part";"
+	syslog "$0 begin to run sql=$sql"
+	Mysql_run "$sql" || syserr "insertZJInfo2Mysql:::error with sql=$sql"
+
+}
+
+function insertInsCooZJInfo2Mysql(){
+	if [[ -z $3 || ! -f $1 ]];then
+		syserr "Usage: insertInsCooZJInfo2Mysql(): ZJINFO_FILE InsCode ZJCode"
+		exit -1;
+	fi
+
+	local sql_part=`head -1 $1`
+	local ins_code=$2;
+	local zj_code=$3;
+
+
+	sql="insert into ins_zj_cooperation set ins_code=\"$ins_code\",zj_code=\"$zj_code\","$sql_part";"
+	$(syslog "$0 begin to run sql=$sql")
+	Mysql_run "$sql" || syserr "insertInsCooZJInfo2Mysql:::error with sql=$sql"
+
+}
+
+##生成SQL，并import导入到mysql 
+## todu: 导入到mysql 的语句
+function import2mysql_zj_products(){
+	local ins_code=$1;
+	local zj_code=$2;
+	local zj_prolist_file=$3;
+	#local sql_file=${zj_prolist_file}.sql
+	
+	while read line ; do
+		## format:  insert into zj_products set ins_code="",no="",saleName="",regName="";
+		local sql="insert into zj_products set ins_code=\"$ins_code\",code=\"$zj_code\",$line;"
+		#debug :dde tudo
+		Mysql_run "$sql" || $(syserr "import2mysql_zj_products:::error with sql=$sql")
+
+	done<$zj_prolist_file 
+}	
+
+##todu: 第二个参数，INS_STR的解析应该交给单独的《对象类》脚本处理！
+if [[ -z $2 ]]
+then
+	echo "Usage:"
+	echo "		%0  INS_CODE INS_CSV_STR"
+	exit;
+fi
+
+code=$1;
+INS_STR=$2;
+dir="data/$code"
+
+Seq_3rd=6;
+Seq_zj=5;
+Seq_regpro=$4;
+Seq_branch=$3;
+Seq_ins_info=$2;
+
+$(syslog "code=$code")
+##检查输入参数正确性
+
+__ret=`echo "$INS_STR"|awk -v "max=$Seq_3rd" '{if(NF>=max) print 1;}'`
+if [[ $__ret -eq 1 ]];	then
+	$(syslog "输入参数检查通过！")
+	$(syslog "$INS_STR")
+else
+	$(syslog "参数不合规：ins_str=$INS_STR")
+
+fi
+
+thirdlisturl=`echo "$INS_STR" |awk -v"seq=$Seq_3rd" '{split($seq,__m,":=");print __m[2]}'`
+zjlisturl=`echo "$INS_STR" |awk -v"seq=$Seq_zj" '{split($seq,__m,":=");print __m[2]}'`
+regprolisturl=`echo "$INS_STR" |awk -v"seq=$Seq_regpro" '{split($seq,__m,":=");print __m[2]}'`
+branchlisturl=`echo "$INS_STR" |awk -v"seq=$Seq_branch" '{split($seq,__m,":=");print __m[2]}'`
+insInfourl=`echo "$INS_STR" |awk -v"seq=$Seq_ins_info" '{split($seq,__m,":=");print __m[2]}'`
+
+
+## DEBUG: TUDO TUDO 
+## zjlisturl 换成thirdlisturl 测试。。。。
+	echo "##############$zjlisturl"
+	zjlisturl=$thirdlisturl
+
+	echo "##############$zjlisturl"
+##
+
+
+## zj file name define
+makeDirExist "$dir"
+zj_dir="$dir/zj/"
+makeDirExist "$zj_dir"  ##确认目录是存在的。
+
+fn_zj_prex="$zj_dir${code}_zj_"
+fn_zjs_list=${fn_zj_prex}plain.csv
+fn_zjs_list_with_link=${fn_zj_prex}with_link.csv
+
+## todu: 按照上面zj的格式整理
+fn_3rd_prex="$dir/3rd_index__${code}"
+fn_regpro_prex="$dir/regpro_index__${code}"
+fn_branch_prex="$dir/branch_index__${code}"
+fn_ins_info_prex="$dir/ins_index__${code}"
+
+
+###########Part 3 zj infos##############
+$(syslog "zjlisturl=$zjlisturl")
+if [[ -z $zjlisturl ]]
+then
+	echo ">>>>>>>>>>"
+	echo "Can not find Code=$code...."
+	echo "<<<<<<<<<<"
+	exit 0;
+fi
+
+## 抓取当前insCode的ZJ 列表页面，并解析出结构化中介信息+links（detailUrl、coo_productsURL) 信息
+
+# wget "$zjlisturl" -O ${fn_zjs_list}.html
+wgetFromUrlToFile "$zjlisturl" "${fn_zjs_list}.html"
+
+
+
+iconvert ${fn_zjs_list}.html
+
+## get zj main parameters to FILE
+
+cat ${fn_zjs_list}.html |grep "\"zjDetail"|cut -d' ' -f6|awk -F'\x27' '{print $2,$4,$6,$8}' > ${fn_zjs_list}
+
+# if [[ -e ${fn_zjs_list}.html ]];then
+# 	rm -rf ${fn_zjs_list}.html
+# fi
+
+$(syslog "see file :: ${fn_zjs_list}")
+
+##global parameter initial....
+param_no=$(getParameter $zjlisturl informationno)
+param_columnid=$(getParameter $zjlisturl columnid)
+param_zj=$(getParameter $zjlisturl zj)
+
+echo "read lines && make zjUrl from zj (${fn_zjs_list}) list...."
+
+> ${fn_zjs_list_with_link}
+while read line ;do
+	$(syslog  "read line::::$line")
+
+	##fetch zj list info .....
+	flag=`echo $line|cut -d' ' -f3`
+	$(syslog "$param_no")
+
+	param_terraceno=`echo $line|cut -d' ' -f1`
+	param_type=`echo $line|cut -d' ' -f4`
+	param_oldterr=`echo $line|cut -d' ' -f2`
+	param_comType="01"
+
+	zjid=$param_terraceno
+	zjurl="";
+	zjurl_allpro="";
+
+	para_str="columnid=$param_columnid&informationno=$param_no&terraceNo=$param_terraceno&zj=$param_zj&oldTerraceNo=$param_oldterr&internetInformationNo=$param_no&type=$param_type&comType=$param_comType";
+
+	if [[ $flag -eq 0 ]]
+	then
+		zjurl=$(makeUrl_oldTerraceProduct "$para_str");
+		$(syslog "flag==0,make old zj_detail_URL...")
+	else
+		zjurl=$(makeUrl_TerraceProduct "$para_str");
+		$(syslog "flag==1,make zj_detail_URL...")
+
+	fi
+
+	zjurl_allpro=$(makeUrl_viewAllPro "$para_str")
+	$(syslog  "zj_detail_url=$zjurl")
+	$(syslog  "zj_detail_url_allpro=$zjurl_allpro")
+	printf "%s\t%s\t%s\r\n" "$line" "$zjurl" "$zjurl_allpro"  >> ${fn_zjs_list_with_link} 
+	$(syslog "append urls to <<${fn_zjs_list_with_link}>> ,zjid=${param_terraceno}:::see file pls.")
+	
+	fn_zj_xxxx_coo_list=${fn_zj_prex}${zjid}_coo_list.csv
+	fn_zj_xxxx_info=${fn_zj_prex}${zjid}_info.csv
+
+	#从zj页面抽取中介信息，保持到以TerraceNo前缀的文件中
+	# 参数： link ,中介id，抓取结果保存文件名
+	extractor_zj_info $zjurl $param_terraceno $fn_zj_xxxx_info
+
+	## 下面：用于产生 zj_info 的关键sql 片段
+	## 从非结构化plain文本 转化为 sql语句，*并执行；
+	## 参数： input_plain_text_file   outputSqlFile
+	$(etl_zj_info "$fn_zj_xxxx_info" "${fn_zj_xxxx_info}.sql")
+
+	## 下面：用于产生 zj_coo_info 的关键sql 片段
+	etl_zj_coo_info "$fn_zj_xxxx_info" "${fn_zj_xxxx_info}_coo.sql"
+
+	##虽然只有一句 中介信息，仍然走的是文件 呵呵
+	insertZJInfo2Mysql "${fn_zj_xxxx_info}.sql" "$zjid"
+
+	insertInsCooZJInfo2Mysql "${fn_zj_xxxx_info}_coo.sql" "$code" "$zjid"
+
+	#从zj_all_product页面抽取中介信息，保持到以TerraceNo前缀的文件中
+	# 参数：Param1 -- zj产品链接（列表）
+	# 参数：Param2 -- zjid
+	# 参数：Param3 -- 结果输出（SQL片段）
+	extractor_zj_pro "$zjurl_allpro" "$param_terraceno" "$fn_zj_xxxx_coo_list"
+
+    ## make to sql 
+   import2mysql_zj_products "$code" "$zjid" "$fn_zj_xxxx_coo_list"
+
+
+done < "${fn_zjs_list}"

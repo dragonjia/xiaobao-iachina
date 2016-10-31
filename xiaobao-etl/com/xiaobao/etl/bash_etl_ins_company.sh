@@ -1,0 +1,1 @@
+awk -F'\t' 'FNR==NR{ins_ph[$1]=$2;ins_en[$1]=$3}FNR<NR{}END{}' ins_company_circ.toplist iachina.toplist 

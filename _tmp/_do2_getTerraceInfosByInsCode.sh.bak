@@ -1,0 +1,193 @@
+#!/bin/bash
+###
+#	$#	传递到脚本的参数个数
+#	$*	以一个单字符串显示所有向脚本传递的参数
+#	$$	脚本运行的当前进程ID号
+#	$!	后台运行的最后一个进程的ID号
+#	$@	与$*相同，但是使用时加引号，并在引号中返回每个参数。
+#	$-	显示Shell使用的当前选项，与set命令功能相同。
+#	$?	显示最后命令的退出状态。0表示没有错误，其他任何值表明有错误。
+###
+
+function iconvert(){
+	_file=$1;
+	if [[ ! -e $_file ]]
+	then
+		echo "iconvert:::FILE NOT FOUND (file=\"$_file\")!"
+		exit 1;
+	fi
+	_tmpfile="/tmp/asdkjfalskdfa.tmp"
+	mv $_file $_tmpfile
+	iconv -f GBK -t UTF8 $_tmpfile > $_file
+}
+
+function getParameter( )
+{
+	url=$1;
+	param=$2;
+#	echo "begin pick up param========> url=$url,param=$2"
+#	echo "debug:>>>>>>>>>>>>>>>>"
+	echo "$url"|awk -v param="$param" 'BEGIN{
+			
+	}{
+		url=$0;
+		for ( a in _ret ) {delete _ret[a];}
+		#print url;
+		split(url,_m,"?|&|=");
+		for(i=2;i<=1024;i+=2){
+			_key=_m[i];
+			if(_key=="") break;
+			_ret[_key]=_m[i+1];
+			#print "DEBUG:_m[i]="_key;
+		}
+		if( param in _ret){
+				print _ret[param];
+			exit;
+		}
+
+	}END{
+	}'
+#	echo "debug:<<<<<<<<<<<<<"
+}
+function printParam(){
+	#printParam param_no param_columnid param_zj flag param_terraceno param_type param_oldterr param_comType 
+	echo "$0:printParam():"$*;
+}
+
+## 生成中介产品详情url ;(zj 详情+部分授权合作产品）
+function makeUrl_TerraceProduct(){
+	url="http://icid.iachina.cn/front/viewTerraceProduct.do?"
+	echo $url$1 
+}
+
+## 生成(旧版)中介产品详情url ;(zj 详情+部分授权合作产品）
+function makeUrl_oldTerraceProduct(){
+	url="http://icid.iachina.cn/front/viewTerraceProductHis.do?"
+	echo $url$1 
+}
+## 生成中介平台全部合作产品页
+function makeUrl_viewAllPro(){
+	url="http://icid.iachina.cn/front/viewAllPro.do?"
+	echo $url$1 
+}
+
+## 从中介页面(viewTerraceProduct.do or viewTerraceProductHis.do)抽取zj信息保存到以TerraceNo前缀的文件中
+function fetch_zj_info(){
+	_url=$1;
+	_TerNo=$2;
+	_save_file="$dir/${_TerNo}_info.txt"
+ echo "fetch_zj_info:debug: save to file:$_save_file....from url=$_url"
+	wget "$_url" -O ${_save_file}.tmp 
+	iconvert ${_save_file}.tmp
+	##--delete....动态适配，信息条目数，假定开始于《xxxx平台全称》；终止于《xxx止日期》
+	_lines=6;
+	cat ${_save_file}.tmp |grep -A${_lines}  "平台全称" |sed 's/<[^>]*>//g' > ${_save_file}
+
+	rm  ${_save_file}.tmp
+}
+## 从中介产品列表抽取产品信息(viewAllPro.do)保存到以TerraceNo前缀的文件中
+function fetch_zj_pro(){
+        _url=$1;
+        _TerNo=$2;
+        _save_file="$dir/${_TerNo}_product.txt"
+ echo "fetch_zj_info:debug: save to file:$_save_file....from url=$_url"
+        wget "$_url" -O ${_save_file}.tmp
+        iconvert ${_save_file}.tmp
+        cat ${_save_file}.tmp |sed '/^\s*$/d'|sed 's/<\/td>\n/<\/td>/g'|sed 's/<[^>]*>//g'> ${_save_file}
+
+	##sed 's/^\s*$//g'|sed 'N;N;s/\n/ /g' ##合并多个空白行
+
+	_nn=`cat ${_save_file}|grep -n "返回上一级"|cut -d':' -f1`
+	head -n $_nn ${_save_file} > ${_save_file}.tmp
+	mv ${_save_file}.tmp ${_save_file}
+
+        #rm  ${_save_file}.tmp
+}
+
+if [[ -z $1 ]]
+then
+	echo "Usage:"
+	echo "		%0  INS_CODE"
+	exit;
+fi
+
+code=$1;
+dir="data/$code"
+
+mainlink="ins_renshou_main_link.csv"
+Seq_3rd=7;
+Seq_zj=6;
+
+echo "code=$code"
+cat $mainlink|grep "$code\t" |awk -F'\t' '{print $1,$2,$5}'
+
+zjlisturl=`cat $mainlink|grep "$code\t" |awk -v"seq_zj=$Seq_zj" -F'\t' '{print $seq_zj}'`
+thirdlisturl=`cat $mainlink|grep "$code\t" |awk -v"seq_3rd=$Seq_3rd" -F'\t' '{print $seq_3rd}'`
+
+if [[ -z $zjlisturl ]]
+then
+	echo ">>>>>>>>>>"
+	echo "Can not find Code=$code...."
+	echo "<<<<<<<<<<"
+	exit 0;
+fi
+if [ ! -d $dir ]
+then
+	echo ">>>>>>>>>>"
+	echo "DIR not Exist,Make it! ($dir)"
+	echo "<<<<<<<<<<"
+	mkdir $dir
+fi
+## for debug with no internet....
+wget "$zjlisturl" -O $dir/index.tmp
+
+iconv -f GBK -t UTF8 $dir/index.tmp > $dir/index.html
+
+
+## get zj main parameters to FILE
+file_zj="/tmp/${code}_zj"
+cat $dir/index.html |grep "\"zjDetail"|cut -d' ' -f6|awk -F'\x27' '{print $2,$4,$6,$8}' > $file_zj
+
+##global parameter initial....
+param_no=$(getParameter $zjlisturl informationno)
+param_columnid=$(getParameter $zjlisturl columnid)
+param_zj=$(getParameter $zjlisturl zj)
+
+echo "read lines && make zjUrl from zj ($file_zj) list...."
+
+while read line ;do
+	echo "read line::::$line"
+
+	##fetch zj list info .....
+	flag=`echo $line|cut -d' ' -f3`
+	echo $param_no
+
+	param_terraceno=`echo $line|cut -d' ' -f1`
+	param_type=`echo $line|cut -d' ' -f4`
+	param_oldterr=`echo $line|cut -d' ' -f2`
+	param_comType="01"
+
+	zjurl="";
+	zjurl_allpro="";
+
+	para_str="columnid=$param_columnid&informationno=$param_no&terraceNo=$param_terraceno&zj=$param_zj&oldTerraceNo=$param_oldterr&internetInformationNo=$param_no&type=$param_type&comType=$param_comType";
+
+	if [[ $flag -eq 0 ]]
+	then
+		echo "flag==0,make old URL";
+		zjurl=$(makeUrl_oldTerraceProduct "$para_str");
+	else
+		echo "flag==1,make URL";
+		zjurl=$(makeUrl_TerraceProduct "$para_str");
+	fi
+
+	zjurl_allpro=$(makeUrl_viewAllPro "$para_str")
+	echo "zjurl="$zjurl
+	echo "zjurl_allpro="$zjurl_allpro
+
+	#从zj页面抽取中介信息，保持到以TerraceNo前缀的文件中
+	fetch_zj_info $zjurl $param_terraceno
+	#从zj_all_product页面抽取中介信息，保持到以TerraceNo前缀的文件中
+	fetch_zj_pro $zjurl_allpro $param_terraceno
+
+done < "$file_zj"
